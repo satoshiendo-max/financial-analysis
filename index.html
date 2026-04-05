@@ -436,6 +436,41 @@ body {
   .card { break-inside: avoid; box-shadow: none; }
   .footer { display: none; }
 }
+
+/* Previous year upload */
+.prev-year-toggle {
+  width: 100%;
+  background: var(--gray-100);
+  border: 1px dashed var(--gray-300);
+  padding: 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-light);
+  transition: all 0.2s;
+}
+.prev-year-toggle:hover { background: var(--gray-200); color: var(--text); }
+.prev-year-toggle.active { background: var(--navy); color: var(--white); border-style: solid; border-color: var(--navy); }
+
+/* Trend charts */
+.trend-card { margin-bottom: 1.5rem; }
+.trend-card canvas { max-height: 360px; }
+.trend-info {
+  text-align: center;
+  color: var(--text-light);
+  padding: 2rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.8;
+}
+
+/* YoY table */
+.yoy-table { width: 100%; border-collapse: collapse; margin-top: 1.2rem; }
+.yoy-table th, .yoy-table td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--gray-200); font-size: 0.9rem; }
+.yoy-table th { text-align: left; font-weight: 500; color: var(--text-light); }
+.yoy-table td { text-align: right; }
+.yoy-table td.label-cell { text-align: left; font-weight: 500; }
+.yoy-change-positive { color: var(--success); font-weight: 600; }
+.yoy-change-negative { color: var(--danger); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -452,6 +487,7 @@ body {
     <button class="tab active" onclick="switchTab('input')">データ入力</button>
     <button class="tab" onclick="switchTab('results')" id="tab-results-btn">分析結果</button>
     <button class="tab" onclick="switchTab('charts')" id="tab-charts-btn">グラフ</button>
+    <button class="tab" onclick="switchTab('trends')" id="tab-trends-btn">推移グラフ</button>
   </div>
 
   <!-- ===== 入力タブ ===== -->
@@ -492,7 +528,35 @@ body {
           <div id="upload-status-pl" style="font-size:0.82rem; color:var(--success); margin-top:0.4rem; text-align:center;"></div>
         </div>
       </div>
-      <div class="note" style="margin-top:1rem;">freee会計「レポート」→「試算表」→ B/S・P/L それぞれ「CSV出力」または「PDF出力」でエクスポートしてください。</div>
+      <div class="note" style="margin-top:1rem;">freee会計「レポート」→「試算表」または「月次推移」→ B/S・P/L それぞれ「CSV出力」でエクスポートしてください。月次推移CSVを使うと推移グラフが表示されます。</div>
+
+      <!-- Previous Year Upload -->
+      <div style="margin-top:1rem;">
+        <button class="prev-year-toggle" id="prev-year-toggle" onclick="togglePrevYear()">＋ 前期データを追加（前年比較）</button>
+        <div id="prev-year-upload" style="display:none; margin-top:0.8rem;">
+          <div style="font-size:0.82rem; color:var(--text-light); margin-bottom:0.5rem; text-align:center;">前期の月次推移CSVをアップロードすると前年対比が表示されます</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div>
+              <div class="upload-area" id="upload-area-bs-prev" onclick="document.getElementById('data-file-bs-prev').click()" style="padding:1.2rem 0.8rem; border-style:dashed;">
+                <div class="upload-icon" style="font-size:1.2rem;">📋</div>
+                <div class="upload-text" style="font-size:0.82rem;">前期 B/S</div>
+                <div class="upload-sub">CSV</div>
+                <input type="file" id="data-file-bs-prev" accept=".csv" onchange="handleFileUpload(event, 'bs', 'previous')">
+              </div>
+              <div id="upload-status-bs-prev" style="font-size:0.82rem; color:var(--success); margin-top:0.3rem; text-align:center;"></div>
+            </div>
+            <div>
+              <div class="upload-area" id="upload-area-pl-prev" onclick="document.getElementById('data-file-pl-prev').click()" style="padding:1.2rem 0.8rem; border-style:dashed;">
+                <div class="upload-icon" style="font-size:1.2rem;">📈</div>
+                <div class="upload-text" style="font-size:0.82rem;">前期 P/L</div>
+                <div class="upload-sub">CSV</div>
+                <input type="file" id="data-file-pl-prev" accept=".csv" onchange="handleFileUpload(event, 'pl', 'previous')">
+              </div>
+              <div id="upload-status-pl-prev" style="font-size:0.82rem; color:var(--success); margin-top:0.3rem; text-align:center;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -650,6 +714,29 @@ body {
     </div>
   </div>
 
+  <!-- ===== 推移グラフタブ ===== -->
+  <div class="tab-panel" id="tab-trends">
+    <div id="trends-area" class="results-hidden">
+      <div id="no-monthly-data" class="card trend-info">
+        月次推移データがありません。<br>
+        freee会計の「月次推移」形式のCSVをアップロードすると、ここに推移グラフが表示されます。
+      </div>
+      <div class="card trend-card" id="revenue-trend-card" style="display:none;">
+        <div class="card-title">月次売上推移</div>
+        <canvas id="chart-revenue-trend"></canvas>
+      </div>
+      <div class="card trend-card" id="expense-trend-card" style="display:none;">
+        <div class="card-title">月次経費推移</div>
+        <canvas id="chart-expense-trend"></canvas>
+      </div>
+      <div class="card trend-card" id="yoy-card" style="display:none;">
+        <div class="card-title">前年比較</div>
+        <canvas id="chart-yoy"></canvas>
+        <div id="yoy-table-area"></div>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <footer class="footer">
@@ -657,6 +744,36 @@ body {
 </footer>
 
 <script>
+// ===== Monthly Data Store =====
+let monthlyData = {
+  current:  { months: [], revenue: [], expenses: {}, totals: {}, periodLabel: '' },
+  previous: { months: [], revenue: [], expenses: {}, totals: {}, periodLabel: '' }
+};
+
+const salaryKeywords = ['役員報酬', '給料手当', '給与手当', '給与', '賞与', '雑給'];
+
+function detectMonthColumns(lines) {
+  for (let r = 0; r < Math.min(lines.length, 10); r++) {
+    const cols = [];
+    for (let i = 0; i < lines[r].length; i++) {
+      if (/^\d{4}-\d{2}$/.test(lines[r][i].trim())) {
+        cols.push({ index: i, label: lines[r][i].trim() });
+      }
+    }
+    if (cols.length >= 3) return cols;
+  }
+  return [];
+}
+
+function extractMonthlyValues(line, monthCols) {
+  return monthCols.map(({ index }) => {
+    if (index >= line.length) return 0;
+    const cleaned = line[index].replace(/,/g, '').trim();
+    const v = parseInt(cleaned);
+    return isNaN(v) ? 0 : v;
+  });
+}
+
 // ===== Utility =====
 function parseNum(id) {
   const el = document.getElementById(id);
@@ -705,43 +822,69 @@ function switchTab(name) {
   });
 });
 
-function handleFileUpload(e, type) {
-  const file = e.target.files[0];
-  if (file) processFile(file, type);
+// Previous year upload drag-drop
+['bs', 'pl'].forEach(type => {
+  const area = document.getElementById('upload-area-' + type + '-prev');
+  if (!area) return;
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+  area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    area.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file, type, 'previous');
+  });
+});
+
+function togglePrevYear() {
+  const el = document.getElementById('prev-year-upload');
+  const btn = document.getElementById('prev-year-toggle');
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  btn.classList.toggle('active', isHidden);
+  btn.textContent = isHidden ? '－ 前期データを閉じる' : '＋ 前期データを追加（前年比較）';
 }
 
-function processFile(file, type) {
-  const statusEl = document.getElementById('upload-status-' + type);
+function handleFileUpload(e, type, year) {
+  const file = e.target.files[0];
+  if (file) processFile(file, type, year);
+}
+
+function processFile(file, type, year) {
+  year = year || 'current';
+  const suffix = year === 'previous' ? type + '-prev' : type;
+  const statusEl = document.getElementById('upload-status-' + suffix);
   statusEl.style.color = 'var(--success)';
 
   if (file.name.toLowerCase().endsWith('.pdf')) {
     processPDF(file, type);
   } else {
-    processCSV(file, type);
+    processCSV(file, type, year);
   }
 }
 
-function processCSV(file, type) {
+function processCSV(file, type, year) {
+  year = year || 'current';
+  const suffix = year === 'previous' ? type + '-prev' : type;
   // Try UTF-8 first, then Shift_JIS if garbled
   const tryRead = (encoding) => {
     const reader = new FileReader();
     reader.onload = function(e) {
       try {
         const text = e.target.result;
-        // If UTF-8 produced garbled text and we haven't tried Shift_JIS yet
         if (encoding === 'UTF-8' && /[\ufffd]/.test(text)) {
           tryRead('Shift_JIS');
           return;
         }
-        console.log('[CSV Parse] encoding:', encoding, 'type:', type, 'lines:', text.split('\n').length);
-        parseFreeeCSV(text, type);
-        document.getElementById('upload-status-' + type).textContent = '✅ ' + file.name;
+        console.log('[CSV Parse] encoding:', encoding, 'type:', type, 'year:', year, 'lines:', text.split('\n').length);
+        parseFreeeCSV(text, type, year);
+        document.getElementById('upload-status-' + suffix).textContent = '✅ ' + file.name;
       } catch(err) {
         if (encoding === 'UTF-8') {
           tryRead('Shift_JIS');
           return;
         }
-        const el = document.getElementById('upload-status-' + type);
+        const el = document.getElementById('upload-status-' + suffix);
         el.textContent = '❌ ' + err.message;
         el.style.color = 'var(--danger)';
       }
@@ -907,33 +1050,47 @@ function parseCSVLine(line) {
   return result;
 }
 
-function parseFreeeCSV(text, type) {
+function parseFreeeCSV(text, type, year) {
+  year = year || 'current';
+  const yearKey = year === 'previous' ? 'previous' : 'current';
   const lines = text.split('\n').map(l => parseCSVLine(l));
+
+  // Detect month columns for trend data
+  const monthCols = detectMonthColumns(lines);
+  const isMonthly = monthCols.length >= 3;
+
+  if (isMonthly && type !== 'bs') {
+    monthlyData[yearKey].months = monthCols.map(c => c.label);
+    monthlyData[yearKey].revenue = [];
+    monthlyData[yearKey].expenses = {};
+  }
 
   // Try to detect period from CSV header rows
   for (const line of lines.slice(0, 10)) {
     const joined = line.join(' ');
-    // Pattern 1: full date "2025年01月01日 〜 2025年12月31日"
     const p1 = joined.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})[日]?\s*[,\s]*[〜～~―\-]+[,\s]*\s*(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
     if (p1) {
       const [, y1, m1, d1, y2, m2, d2] = p1;
-      document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-${d1.padStart(2,'0')}`;
-      document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${d2.padStart(2,'0')}`;
+      if (year === 'current') {
+        document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-${d1.padStart(2,'0')}`;
+        document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${d2.padStart(2,'0')}`;
+      }
+      monthlyData[yearKey].periodLabel = `${y1}/${m1}～${y2}/${m2}`;
     }
-    // Pattern 2: month only "2025年03月～2026年02月"
     if (!p1) {
       const p2 = joined.match(/(\d{4})年(\d{1,2})月\s*[〜～~―\-]+\s*(\d{4})年(\d{1,2})月/);
       if (p2) {
         const [, y1, m1, y2, m2] = p2;
-        document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-01`;
-        const lastDay = new Date(parseInt(y2), parseInt(m2), 0).getDate();
-        document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${lastDay}`;
+        if (year === 'current') {
+          document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-01`;
+          const lastDay = new Date(parseInt(y2), parseInt(m2), 0).getDate();
+          document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${lastDay}`;
+        }
+        monthlyData[yearKey].periodLabel = `${y1}/${m1}～${y2}/${m2}`;
       }
     }
   }
 
-  // freee CSV: account names use column indentation for hierarchy.
-  // Join all columns for full text matching.
   const bsMapping = {
     '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash', '円普通預金': 'bs_cash',
     '売掛金': 'bs_receivables', '未収入金': 'bs_receivables',
@@ -950,21 +1107,19 @@ function parseFreeeCSV(text, type) {
   const mapping = type === 'bs' ? bsMapping : type === 'pl' ? plMapping : { ...bsMapping, ...plMapping };
 
   const sums = {};
+  let inSGA = false;
 
   for (const line of lines) {
     if (line.length < 2) continue;
 
-    // Join non-empty columns for keyword matching
     const fullText = line.filter(c => c.trim()).join(' ');
     if (!fullText) continue;
 
-    // Is this a summary/total line?
     const isSummary = line.some(c => {
       const t = c.trim();
       return t.endsWith('計') || t.endsWith('金額');
     });
 
-    // Extract amount: last non-zero integer, skip percentage columns
     let amount = 0;
     for (let i = line.length - 1; i >= 0; i--) {
       const cleaned = line[i].replace(/,/g, '').trim();
@@ -973,8 +1128,38 @@ function parseFreeeCSV(text, type) {
       if (!isNaN(v) && cleaned !== '') { amount = v; break; }
     }
 
-    // Individual account matching (non-summary lines)
-    // Match only ONCE per line to avoid double counting (e.g. '普通預金' and '円普通預金')
+    // === Monthly data extraction (PL only) ===
+    if (isMonthly && type !== 'bs') {
+      // Detect SGA section: header row with only the section name, no numeric data
+      const textOnly = line.slice(0, 6).filter(c => c.trim()).join('');
+      if (!isSummary && (textOnly === '販売管理費' || textOnly === '販売費及び一般管理費' || textOnly === '経費')) {
+        inSGA = true;
+      }
+
+      // Revenue from 売上高 計 row
+      if (isSummary && fullText.includes('売上高') && !fullText.includes('原価') && !fullText.includes('総')) {
+        monthlyData[yearKey].revenue = extractMonthlyValues(line, monthCols);
+      }
+
+      // Individual SGA items
+      if (inSGA && !isSummary && amount !== 0) {
+        let accountName = '';
+        for (let i = 0; i < Math.min(6, line.length); i++) {
+          const t = line[i].trim();
+          if (t && !/^[\d,\.\-]+$/.test(t) && !/^\d{4}-\d{2}$/.test(t)) accountName = t;
+        }
+        if (accountName) {
+          monthlyData[yearKey].expenses[accountName] = extractMonthlyValues(line, monthCols);
+        }
+      }
+
+      // End of SGA section
+      if (isSummary && (fullText.includes('販売管理費') || fullText.includes('販売費及び一般管理費') || (fullText.includes('経費') && fullText.includes('計')))) {
+        inSGA = false;
+      }
+    }
+
+    // === Individual account matching (non-summary lines) ===
     if (!isSummary && amount !== 0) {
       let matched = false;
       for (const [key, field] of Object.entries(mapping)) {
@@ -983,7 +1168,6 @@ function parseFreeeCSV(text, type) {
           matched = true;
         }
       }
-      // BS: 未払金 (exclude 未払法人税等)
       if (!matched && type !== 'pl' && fullText.includes('未払金') && !fullText.includes('未払法人税')) {
         sums['bs_payables'] = (sums['bs_payables'] || 0) + amount;
       }
@@ -1013,27 +1197,32 @@ function parseFreeeCSV(text, type) {
           if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
         }
       }
-      // Non-operating income/expense
       if (fullText.includes('営業外収益') && !fullText.includes('費用') && amount > 0) sums['pl_other_income'] = amount;
       if (fullText.includes('営業外費用') && amount > 0) sums['pl_other_expense'] = amount;
       if (fullText.includes('特別利益') && amount > 0) sums['pl_extraordinary_income'] = amount;
       if (fullText.includes('特別損失') && amount > 0) sums['pl_extraordinary_loss'] = amount;
-      // Tax line (not summary, not adjustment)
       if (!isSummary && fullText.includes('法人税') && !fullText.includes('調整') && !fullText.includes('税引') && amount > 0) {
         sums['pl_tax'] = amount;
       }
     }
   }
 
-  console.log('[CSV Parse] type:', type, 'sums:', JSON.stringify(sums));
+  console.log('[CSV Parse] type:', type, 'year:', year, 'sums:', JSON.stringify(sums));
+  if (isMonthly) console.log('[CSV Monthly]', yearKey, JSON.stringify({ months: monthlyData[yearKey].months, revenueLen: monthlyData[yearKey].revenue.length, expenses: Object.keys(monthlyData[yearKey].expenses) }));
 
-  // Set values to form
-  for (const [field, val] of Object.entries(sums)) {
-    if (!field.startsWith('_')) setInput(field, Math.abs(val));
+  // Set values to form (current year) or store for YoY (previous year)
+  if (year === 'previous') {
+    for (const [field, val] of Object.entries(sums)) {
+      if (!field.startsWith('_')) monthlyData.previous.totals[field] = Math.abs(val);
+    }
+  } else {
+    for (const [field, val] of Object.entries(sums)) {
+      if (!field.startsWith('_')) setInput(field, Math.abs(val));
+    }
   }
 
-  // Calculate "other" categories (BS only)
-  if (type !== 'pl') {
+  // Calculate "other" categories (BS, current year only)
+  if (type !== 'pl' && year !== 'previous') {
     const ca = Math.abs(sums['_current_assets'] || 0);
     const knownCA = Math.abs(sums['bs_cash']||0) + Math.abs(sums['bs_receivables']||0) + Math.abs(sums['bs_inventory']||0);
     if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
@@ -1147,8 +1336,10 @@ function runAnalysis() {
 
   renderResults(data);
   renderCharts(data);
+  renderTrendCharts(data);
 
-  // Switch to results tab
+  // Switch to results tab (or trends if monthly data available)
+  const hasTrends = monthlyData.current.months.length > 0 && monthlyData.current.revenue.length > 0;
   switchTabDirect('results');
 }
 
@@ -1388,6 +1579,212 @@ function renderCharts(data) {
       }
     }
   });
+}
+
+// ===== Trend Charts =====
+function renderTrendCharts(data) {
+  // Destroy previous trend charts
+  ['revenueTrend', 'expenseTrend', 'yoy'].forEach(k => {
+    if (charts[k]) { charts[k].destroy(); delete charts[k]; }
+  });
+
+  const current = monthlyData.current;
+  const previous = monthlyData.previous;
+  const hasCurrent = current.months.length > 0 && current.revenue.length > 0;
+  const hasPrevious = previous.months.length > 0 && previous.revenue.length > 0;
+
+  // Show trends area
+  document.getElementById('trends-area').classList.remove('results-hidden');
+
+  if (!hasCurrent) {
+    document.getElementById('no-monthly-data').style.display = 'block';
+    document.getElementById('revenue-trend-card').style.display = 'none';
+    document.getElementById('expense-trend-card').style.display = 'none';
+    document.getElementById('yoy-card').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('no-monthly-data').style.display = 'none';
+
+  // Month labels: "3月", "4月", ...
+  const monthLabels = current.months.map(m => parseInt(m.split('-')[1]) + '月');
+
+  // ─── Revenue Trend ───
+  document.getElementById('revenue-trend-card').style.display = 'block';
+
+  const revenueDatasets = [{
+    label: current.periodLabel ? '当期（' + current.periodLabel + '）' : '当期売上',
+    data: current.revenue,
+    backgroundColor: 'rgba(200, 164, 92, 0.75)',
+    borderColor: 'rgba(200, 164, 92, 1)',
+    borderWidth: 1,
+    borderRadius: 4,
+    order: 2,
+  }];
+
+  if (hasPrevious) {
+    revenueDatasets.push({
+      label: previous.periodLabel ? '前期（' + previous.periodLabel + '）' : '前期売上',
+      data: previous.revenue.slice(0, current.months.length),
+      type: 'line',
+      borderColor: 'rgba(26, 42, 74, 0.65)',
+      backgroundColor: 'rgba(26, 42, 74, 0.08)',
+      borderWidth: 2.5,
+      borderDash: [6, 3],
+      pointRadius: 4,
+      pointBackgroundColor: 'rgba(26, 42, 74, 0.65)',
+      fill: false,
+      order: 1,
+    });
+  }
+
+  charts.revenueTrend = new Chart(document.getElementById('chart-revenue-trend'), {
+    type: 'bar',
+    data: { labels: monthLabels, datasets: revenueDatasets },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: hasPrevious, position: 'top', labels: { font: { size: 12 } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + '円' } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => fmtYen(v) } }
+      }
+    }
+  });
+
+  // ─── Expense Trend (stacked bar) ───
+  const expenseNames = Object.keys(current.expenses);
+  if (expenseNames.length > 0) {
+    document.getElementById('expense-trend-card').style.display = 'block';
+
+    // Sort by total descending
+    const sorted = expenseNames.map(name => ({
+      name,
+      total: current.expenses[name].reduce((a, b) => a + b, 0)
+    })).sort((a, b) => b.total - a.total);
+
+    const colors = ['#ef5350','#ff7043','#ffa726','#ffca28','#66bb6a','#42a5f5','#ab47bc','#26c6da','#8d6e63','#78909c','#5c6bc0','#26a69a','#d4e157','#ec407a'];
+    // Highlight salary items with warm tones
+    const isSalary = name => salaryKeywords.some(kw => name.includes(kw));
+
+    const expenseDatasets = sorted.map((item, i) => ({
+      label: item.name + (isSalary(item.name) ? ' ★' : ''),
+      data: current.expenses[item.name],
+      backgroundColor: colors[i % colors.length],
+      borderRadius: 1,
+    }));
+
+    charts.expenseTrend = new Chart(document.getElementById('chart-expense-trend'), {
+      type: 'bar',
+      data: { labels: monthLabels, datasets: expenseDatasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 14 } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + '円' } }
+        },
+        scales: {
+          x: { stacked: true },
+          y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtYen(v) } }
+        }
+      }
+    });
+  } else {
+    document.getElementById('expense-trend-card').style.display = 'none';
+  }
+
+  // ─── YoY Comparison ───
+  const prevTotals = previous.totals || {};
+  const hasPrevTotals = prevTotals.pl_revenue > 0;
+
+  if (hasPrevTotals) {
+    document.getElementById('yoy-card').style.display = 'block';
+
+    const { pl } = data;
+    const prevRev = prevTotals.pl_revenue || 0;
+    const prevCogs = prevTotals.pl_cogs || 0;
+    const prevSga = prevTotals.pl_sga || 0;
+    const prevOI = prevTotals.pl_other_income || 0;
+    const prevOE = prevTotals.pl_other_expense || 0;
+    const prevTax = prevTotals.pl_tax || 0;
+    const prevGross = prevRev - prevCogs;
+    const prevOp = prevGross - prevSga;
+    const prevOrd = prevOp + prevOI - prevOE;
+    const prevNet = prevOrd - prevTax;
+
+    const yoyItems = [
+      { label: '売上高', cur: pl.revenue, prev: prevRev },
+      { label: '売上総利益', cur: pl.grossProfit, prev: prevGross },
+      { label: '営業利益', cur: pl.operatingProfit, prev: prevOp },
+      { label: '経常利益', cur: pl.ordinaryProfit, prev: prevOrd },
+      { label: '当期純利益', cur: pl.netProfit, prev: prevNet },
+    ];
+
+    // Grouped bar chart
+    charts.yoy = new Chart(document.getElementById('chart-yoy'), {
+      type: 'bar',
+      data: {
+        labels: yoyItems.map(i => i.label),
+        datasets: [
+          {
+            label: current.periodLabel || '当期',
+            data: yoyItems.map(i => i.cur),
+            backgroundColor: 'rgba(200, 164, 92, 0.8)',
+            borderColor: 'rgba(200, 164, 92, 1)',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+          {
+            label: previous.periodLabel || '前期',
+            data: yoyItems.map(i => i.prev),
+            backgroundColor: 'rgba(26, 42, 74, 0.6)',
+            borderColor: 'rgba(26, 42, 74, 0.8)',
+            borderWidth: 1,
+            borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 12 } } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + '円' } }
+        },
+        scales: {
+          y: { ticks: { callback: v => fmtYen(v) } }
+        }
+      }
+    });
+
+    // YoY table
+    const pctChange = (cur, prev) => {
+      if (!prev) return '—';
+      const pct = ((cur - prev) / Math.abs(prev)) * 100;
+      const cls = pct >= 0 ? 'yoy-change-positive' : 'yoy-change-negative';
+      const sign = pct >= 0 ? '+' : '';
+      return `<span class="${cls}">${sign}${pct.toFixed(1)}%</span>`;
+    };
+
+    document.getElementById('yoy-table-area').innerHTML = `
+      <table class="yoy-table">
+        <thead><tr><th></th><th>${current.periodLabel || '当期'}</th><th>${previous.periodLabel || '前期'}</th><th>増減率</th></tr></thead>
+        <tbody>
+          ${yoyItems.map(i => `
+            <tr>
+              <td class="label-cell">${i.label}</td>
+              <td>${i.cur.toLocaleString()}円</td>
+              <td>${i.prev.toLocaleString()}円</td>
+              <td>${pctChange(i.cur, i.prev)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else {
+    document.getElementById('yoy-card').style.display = 'none';
+    document.getElementById('yoy-table-area').innerHTML = '';
+  }
 }
 </script>
 </body>
