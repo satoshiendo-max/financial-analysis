@@ -995,7 +995,7 @@ function parseFreeeCSV(text, type) {
       if (fullText.includes('固定資産')) sums['bs_fixed_assets'] = amount;
       if (fullText.includes('流動負債')) sums['_current_liab'] = amount;
       if (fullText.includes('固定負債')) sums['_fixed_liab'] = amount;
-      if (fullText.includes('純資産')) sums['bs_equity'] = amount;
+      if (fullText.includes('純資産') && !fullText.includes('負債')) sums['bs_equity'] = amount;
       if (fullText.includes('株主資本') && !sums['bs_equity']) sums['bs_equity'] = amount;
       if (fullText.includes('資本') && fullText.includes('計') && !fullText.includes('負債') && !fullText.includes('回転')) {
         sums['bs_equity'] = sums['bs_equity'] || amount;
