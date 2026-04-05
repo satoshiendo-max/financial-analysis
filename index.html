@@ -423,6 +423,7 @@ body {
   .input-grid { grid-template-columns: 1fr; }
   .chart-grid { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .period-row { flex-direction: column; align-items: flex-start; }
   .tabs { gap: 0; }
   .tab { padding: 0.6rem 0.8rem; font-size: 0.85rem; }
 }
@@ -469,18 +470,29 @@ body {
 
     <div class="card">
       <div class="card-title">ファイルアップロード</div>
-      <div class="upload-area" id="upload-area" onclick="document.getElementById('data-file').click()">
-        <div class="upload-icon">📊</div>
-        <div class="upload-text">クリックまたはドラッグ＆ドロップでファイルを選択</div>
-        <div class="upload-sub">freee会計の試算表エクスポートに対応</div>
-        <div class="file-types">
-          <span class="file-type-pill">CSV</span>
-          <span class="file-type-pill">PDF</span>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+        <!-- BS Upload -->
+        <div>
+          <div class="upload-area" id="upload-area-bs" onclick="document.getElementById('data-file-bs').click()" style="padding:1.5rem 1rem;">
+            <div class="upload-icon">📋</div>
+            <div class="upload-text">貸借対照表（B/S）</div>
+            <div class="upload-sub">CSV / PDF</div>
+            <input type="file" id="data-file-bs" accept=".csv,.pdf" onchange="handleFileUpload(event, 'bs')">
+          </div>
+          <div id="upload-status-bs" style="font-size:0.82rem; color:var(--success); margin-top:0.4rem; text-align:center;"></div>
         </div>
-        <input type="file" id="data-file" accept=".csv,.pdf" onchange="handleFileUpload(event)">
+        <!-- PL Upload -->
+        <div>
+          <div class="upload-area" id="upload-area-pl" onclick="document.getElementById('data-file-pl').click()" style="padding:1.5rem 1rem;">
+            <div class="upload-icon">📈</div>
+            <div class="upload-text">損益計算書（P/L）</div>
+            <div class="upload-sub">CSV / PDF</div>
+            <input type="file" id="data-file-pl" accept=".csv,.pdf" onchange="handleFileUpload(event, 'pl')">
+          </div>
+          <div id="upload-status-pl" style="font-size:0.82rem; color:var(--success); margin-top:0.4rem; text-align:center;"></div>
+        </div>
       </div>
-      <div id="upload-status" style="font-size:0.85rem; color:var(--success); margin-bottom:0.5rem;"></div>
-      <div class="note">「レポート」→「試算表」→「CSV出力」または「PDF出力」からエクスポートしたファイルをご利用ください。</div>
+      <div class="note" style="margin-top:1rem;">freee会計「レポート」→「試算表」→ B/S・P/L それぞれ「CSV出力」または「PDF出力」でエクスポートしてください。</div>
     </div>
 
     <div class="card">
@@ -681,49 +693,52 @@ function switchTab(name) {
 }
 
 // ===== File Upload =====
-const uploadArea = document.getElementById('upload-area');
-uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
-uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-uploadArea.addEventListener('drop', e => {
-  e.preventDefault();
-  uploadArea.classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (file) processFile(file);
+['bs', 'pl'].forEach(type => {
+  const area = document.getElementById('upload-area-' + type);
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+  area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    area.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file, type);
+  });
 });
 
-function handleFileUpload(e) {
+function handleFileUpload(e, type) {
   const file = e.target.files[0];
-  if (file) processFile(file);
+  if (file) processFile(file, type);
 }
 
-function processFile(file) {
-  const statusEl = document.getElementById('upload-status');
+function processFile(file, type) {
+  const statusEl = document.getElementById('upload-status-' + type);
   statusEl.style.color = 'var(--success)';
 
   if (file.name.toLowerCase().endsWith('.pdf')) {
-    processPDF(file);
+    processPDF(file, type);
   } else {
-    processCSV(file);
+    processCSV(file, type);
   }
 }
 
-function processCSV(file) {
+function processCSV(file, type) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
       const text = e.target.result;
-      parseFreeeCSV(text);
-      document.getElementById('upload-status').textContent = '✅ ' + file.name + ' を読み込みました（CSV）';
+      parseFreeeCSV(text, type);
+      document.getElementById('upload-status-' + type).textContent = '✅ ' + file.name;
     } catch(err) {
-      document.getElementById('upload-status').textContent = '❌ 読み込みエラー: ' + err.message;
-      document.getElementById('upload-status').style.color = 'var(--danger)';
+      const el = document.getElementById('upload-status-' + type);
+      el.textContent = '❌ ' + err.message;
+      el.style.color = 'var(--danger)';
     }
   };
   reader.readAsText(file, 'Shift_JIS');
 }
 
-async function processPDF(file) {
-  const statusEl = document.getElementById('upload-status');
+async function processPDF(file, type) {
+  const statusEl = document.getElementById('upload-status-' + type);
   statusEl.textContent = '⏳ PDF読み込み中...';
 
   try {
@@ -752,20 +767,19 @@ async function processPDF(file) {
       fullText += lines.join('\n') + '\n';
     }
 
-    parseFreePDF(fullText);
-    statusEl.textContent = '✅ ' + file.name + ' を読み込みました（PDF / ' + pdf.numPages + 'ページ）';
+    parseFreePDF(fullText, type);
+    statusEl.textContent = '✅ ' + file.name + '（PDF）';
   } catch(err) {
-    statusEl.textContent = '❌ PDF読み込みエラー: ' + err.message;
+    statusEl.textContent = '❌ ' + err.message;
     statusEl.style.color = 'var(--danger)';
   }
 }
 
-function parseFreePDF(text) {
+function parseFreePDF(text, type) {
   const lines = text.split('\n');
 
   // Try to detect period from PDF header
   for (const line of lines.slice(0, 20)) {
-    // Match patterns like "2025年01月01日" ~ "2025年12月31日" or "2025/01/01" ~ "2025/12/31"
     const periodMatch = line.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})[日]?\s*[〜～~―\-]+\s*(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
     if (periodMatch) {
       const [, y1, m1, d1, y2, m2, d2] = periodMatch;
@@ -774,15 +788,11 @@ function parseFreePDF(text) {
     }
   }
 
-  // Parse amounts from PDF text
-  // freee PDF format: account name followed by amounts (tab-separated)
   const sums = {};
 
   function extractAmount(line) {
-    // Find numbers in the line (may have commas, may be negative)
     const nums = line.match(/[-]?[\d,]+/g);
     if (!nums) return 0;
-    // Try last meaningful number as closing balance
     for (let i = nums.length - 1; i >= 0; i--) {
       const v = parseInt(nums[i].replace(/,/g, ''));
       if (!isNaN(v) && v !== 0) return v;
@@ -790,7 +800,6 @@ function parseFreePDF(text) {
     return 0;
   }
 
-  // BS mappings
   const bsMapping = {
     '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash',
     '売掛金': 'bs_receivables', '未収入金': 'bs_receivables',
@@ -800,44 +809,46 @@ function parseFreePDF(text) {
     '長期借入金': 'bs_long_debt',
   };
 
-  // PL mappings
   const plMapping = {
     '売上高': 'pl_revenue',
     '売上原価': 'pl_cogs',
     '法人税、住民税及び事業税': 'pl_tax', '法人税等': 'pl_tax',
   };
 
-  const allMapping = { ...bsMapping, ...plMapping };
+  const mapping = type === 'bs' ? bsMapping : type === 'pl' ? plMapping : { ...bsMapping, ...plMapping };
 
   for (const line of lines) {
     if (!line.trim()) continue;
     const amount = extractAmount(line);
     if (amount === 0) continue;
 
-    // Individual account matching
-    for (const [key, field] of Object.entries(allMapping)) {
+    for (const [key, field] of Object.entries(mapping)) {
       if (line.includes(key)) {
         sums[field] = (sums[field] || 0) + amount;
       }
     }
 
-    // Category totals
-    if (line.includes('流動資産') && (line.includes('合計') || line.includes('計'))) sums['_current_assets'] = amount;
-    if (line.includes('固定資産') && (line.includes('合計') || line.includes('計'))) sums['bs_fixed_assets'] = amount;
-    if (line.includes('流動負債') && (line.includes('合計') || line.includes('計'))) sums['_current_liab'] = amount;
-    if (line.includes('固定負債') && (line.includes('合計') || line.includes('計'))) sums['_fixed_liab'] = amount;
-    if (line.includes('純資産') && (line.includes('合計') || line.includes('計'))) sums['bs_equity'] = amount;
-    if (line.includes('資本') && line.includes('合計') && !line.includes('回転')) sums['bs_equity'] = sums['bs_equity'] || amount;
-    if (line.includes('販売費及び一般管理費') && (line.includes('合計') || line.includes('計'))) sums['pl_sga'] = amount;
-    if (line.includes('経費') && line.includes('計') && !sums['pl_sga']) sums['pl_sga'] = amount;
-    if (line.includes('営業外収益') && (line.includes('合計') || line.includes('計'))) sums['pl_other_income'] = amount;
-    if (line.includes('営業外費用') && (line.includes('合計') || line.includes('計'))) sums['pl_other_expense'] = amount;
-    if (line.includes('特別利益') && (line.includes('合計') || line.includes('計'))) sums['pl_extraordinary_income'] = amount;
-    if (line.includes('特別損失') && (line.includes('合計') || line.includes('計'))) sums['pl_extraordinary_loss'] = amount;
+    // BS category totals
+    if (type !== 'pl') {
+      if (line.includes('流動資産') && (line.includes('合計') || line.includes('計'))) sums['_current_assets'] = amount;
+      if (line.includes('固定資産') && (line.includes('合計') || line.includes('計'))) sums['bs_fixed_assets'] = amount;
+      if (line.includes('流動負債') && (line.includes('合計') || line.includes('計'))) sums['_current_liab'] = amount;
+      if (line.includes('固定負債') && (line.includes('合計') || line.includes('計'))) sums['_fixed_liab'] = amount;
+      if (line.includes('純資産') && (line.includes('合計') || line.includes('計'))) sums['bs_equity'] = amount;
+      if (line.includes('資本') && line.includes('合計') && !line.includes('回転')) sums['bs_equity'] = sums['bs_equity'] || amount;
+    }
 
-    // freee individual proprietorship: 収入金額 as revenue
-    if (line.includes('収入金額') && (line.includes('合計') || line.includes('計'))) {
-      if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
+    // PL category totals
+    if (type !== 'bs') {
+      if (line.includes('販売費及び一般管理費') && (line.includes('合計') || line.includes('計'))) sums['pl_sga'] = amount;
+      if (line.includes('経費') && line.includes('計') && !sums['pl_sga']) sums['pl_sga'] = amount;
+      if (line.includes('営業外収益') && (line.includes('合計') || line.includes('計'))) sums['pl_other_income'] = amount;
+      if (line.includes('営業外費用') && (line.includes('合計') || line.includes('計'))) sums['pl_other_expense'] = amount;
+      if (line.includes('特別利益') && (line.includes('合計') || line.includes('計'))) sums['pl_extraordinary_income'] = amount;
+      if (line.includes('特別損失') && (line.includes('合計') || line.includes('計'))) sums['pl_extraordinary_loss'] = amount;
+      if (line.includes('収入金額') && (line.includes('合計') || line.includes('計'))) {
+        if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
+      }
     }
   }
 
@@ -846,40 +857,58 @@ function parseFreePDF(text) {
     if (!field.startsWith('_')) setInput(field, val);
   }
 
-  // Calculate "other" categories
-  const ca = sums['_current_assets'] || 0;
-  const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
-  if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
+  // Calculate "other" categories (BS only)
+  if (type !== 'pl') {
+    const ca = sums['_current_assets'] || 0;
+    const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
+    if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
 
-  const cl = sums['_current_liab'] || 0;
-  const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
-  if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
+    const cl = sums['_current_liab'] || 0;
+    const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
+    if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
 
-  const fl = sums['_fixed_liab'] || 0;
-  const knownFL = (sums['bs_long_debt']||0);
-  if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
+    const fl = sums['_fixed_liab'] || 0;
+    const knownFL = (sums['bs_long_debt']||0);
+    if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
+  }
 }
 
-function parseFreeeCSV(text) {
+function parseFreeeCSV(text, type) {
   const lines = text.split('\n').map(l => l.split(',').map(c => c.replace(/"/g, '').trim()));
 
-  const mapping = {
+  // Try to detect period from CSV header rows
+  for (const line of lines.slice(0, 5)) {
+    const joined = line.join(',');
+    const periodMatch = joined.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})[日]?\s*[〜～~―\-]+\s*(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
+    if (periodMatch) {
+      const [, y1, m1, d1, y2, m2, d2] = periodMatch;
+      document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-${d1.padStart(2,'0')}`;
+      document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${d2.padStart(2,'0')}`;
+    }
+  }
+
+  const bsMapping = {
     '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash',
     '売掛金': 'bs_receivables', '未収入金': 'bs_receivables',
     '商品': 'bs_inventory', '製品': 'bs_inventory', '原材料': 'bs_inventory', '仕掛品': 'bs_inventory',
     '買掛金': 'bs_payables', '未払金': 'bs_payables',
     '短期借入金': 'bs_short_debt',
     '長期借入金': 'bs_long_debt',
+  };
+
+  const plMapping = {
     '売上高': 'pl_revenue',
     '売上原価': 'pl_cogs',
     '法人税、住民税及び事業税': 'pl_tax', '法人税等': 'pl_tax',
   };
 
+  // Use appropriate mapping based on upload type
+  const mapping = type === 'bs' ? bsMapping : type === 'pl' ? plMapping : { ...bsMapping, ...plMapping };
+
   const sums = {};
   for (const line of lines) {
     if (line.length < 2) continue;
     const name = line[0];
-    // Try to find closing balance (last numeric column) or amount
     let amount = 0;
     for (let i = line.length - 1; i >= 1; i--) {
       const v = parseInt(line[i].replace(/,/g, ''));
@@ -892,37 +921,27 @@ function parseFreeeCSV(text) {
       }
     }
 
-    // Category-level detection
-    if (name.includes('流動資産') && name.includes('合計')) {
-      const ca = amount;
-      sums['_current_assets'] = ca;
+    // BS category totals
+    if (type !== 'pl') {
+      if (name.includes('流動資産') && name.includes('合計')) sums['_current_assets'] = amount;
+      if (name.includes('固定資産') && name.includes('合計')) sums['bs_fixed_assets'] = amount;
+      if (name.includes('流動負債') && name.includes('合計')) sums['_current_liab'] = amount;
+      if (name.includes('固定負債') && name.includes('合計')) sums['_fixed_liab'] = amount;
+      if (name.includes('純資産') && name.includes('合計')) sums['bs_equity'] = amount;
+      if (name.includes('資本') && name.includes('合計') && !name.includes('回転')) sums['bs_equity'] = sums['bs_equity'] || amount;
     }
-    if (name.includes('固定資産') && name.includes('合計')) {
-      sums['bs_fixed_assets'] = amount;
-    }
-    if (name.includes('流動負債') && name.includes('合計')) {
-      sums['_current_liab'] = amount;
-    }
-    if (name.includes('固定負債') && name.includes('合計')) {
-      sums['_fixed_liab'] = amount;
-    }
-    if (name.includes('純資産') && name.includes('合計')) {
-      sums['bs_equity'] = amount;
-    }
-    if (name.includes('販売費及び一般管理費') && name.includes('合計')) {
-      sums['pl_sga'] = amount;
-    }
-    if (name.includes('営業外収益') && name.includes('合計')) {
-      sums['pl_other_income'] = amount;
-    }
-    if (name.includes('営業外費用') && name.includes('合計')) {
-      sums['pl_other_expense'] = amount;
-    }
-    if (name.includes('特別利益') && name.includes('合計')) {
-      sums['pl_extraordinary_income'] = amount;
-    }
-    if (name.includes('特別損失') && name.includes('合計')) {
-      sums['pl_extraordinary_loss'] = amount;
+
+    // PL category totals
+    if (type !== 'bs') {
+      if (name.includes('販売費及び一般管理費') && name.includes('合計')) sums['pl_sga'] = amount;
+      if (name.includes('経費') && name.includes('計') && !sums['pl_sga']) sums['pl_sga'] = amount;
+      if (name.includes('営業外収益') && name.includes('合計')) sums['pl_other_income'] = amount;
+      if (name.includes('営業外費用') && name.includes('合計')) sums['pl_other_expense'] = amount;
+      if (name.includes('特別利益') && name.includes('合計')) sums['pl_extraordinary_income'] = amount;
+      if (name.includes('特別損失') && name.includes('合計')) sums['pl_extraordinary_loss'] = amount;
+      if (name.includes('収入金額') && (name.includes('合計') || name.includes('計'))) {
+        if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
+      }
     }
   }
 
@@ -931,18 +950,20 @@ function parseFreeeCSV(text) {
     if (!field.startsWith('_')) setInput(field, val);
   }
 
-  // Calculate "other" categories
-  const ca = sums['_current_assets'] || 0;
-  const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
-  if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
+  // Calculate "other" categories (BS only)
+  if (type !== 'pl') {
+    const ca = sums['_current_assets'] || 0;
+    const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
+    if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
 
-  const cl = sums['_current_liab'] || 0;
-  const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
-  if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
+    const cl = sums['_current_liab'] || 0;
+    const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
+    if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
 
-  const fl = sums['_fixed_liab'] || 0;
-  const knownFL = (sums['bs_long_debt']||0);
-  if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
+    const fl = sums['_fixed_liab'] || 0;
+    const knownFL = (sums['bs_long_debt']||0);
+    if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
+  }
 }
 
 // ===== Sample Data =====
