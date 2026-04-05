@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>財務分析ツール | FinTax Group</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --navy: #1a2a4a;
+  --navy-light: #2a3f6a;
+  --navy-dark: #0f1a30;
+  --gold: #c8a45c;
+  --gold-light: #e0c882;
+  --gold-dark: #a88a3c;
+  --bg: #f5f5f0;
+  --white: #ffffff;
+  --gray-100: #f0f0eb;
+  --gray-200: #e0e0d8;
+  --gray-300: #c0c0b8;
+  --gray-500: #808078;
+  --gray-700: #505048;
+  --text: #2a2a28;
+  --text-light: #606058;
+  --success: #2e7d32;
+  --danger: #c62828;
+  --info: #1565c0;
+  --warn: #e65100;
+}
+
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  color: var(--white);
+  padding: 2.5rem 1.5rem 2rem;
+  text-align: center;
+  position: relative;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-dark));
+}
+.header-logo {
+  height: 40px;
+  margin-bottom: 1rem;
+  filter: brightness(0) invert(1);
+}
+.header h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+.header p { font-size: 0.95rem; opacity: 0.85; font-weight: 300; }
+
+.main { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--gray-200);
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+.tab {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.tab:hover { color: var(--navy); }
+.tab.active { color: var(--gold-dark); border-bottom-color: var(--gold); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Card */
+.card {
+  background: var(--white);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid var(--gray-200);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--gold);
+}
+
+/* Upload area */
+.upload-area {
+  border: 2px dashed var(--gray-300);
+  border-radius: 10px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: var(--gray-100);
+  margin-bottom: 1rem;
+}
+.upload-area:hover, .upload-area.dragover {
+  border-color: var(--gold);
+  background: #fdf6e3;
+}
+.upload-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.upload-text { font-size: 0.95rem; color: var(--text-light); margin-bottom: 0.5rem; }
+.upload-sub { font-size: 0.82rem; color: var(--gray-500); }
+.upload-area input[type="file"] { display: none; }
+
+/* Manual input */
+.input-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.input-group { display: flex; flex-direction: column; gap: 0.25rem; }
+.input-group label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--gray-700);
+}
+.input-group input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: right;
+  transition: border-color 0.2s;
+}
+.input-group input:focus { outline: none; border-color: var(--gold); }
+.input-section-title {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--navy);
+  margin-top: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 2rem;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 1rem;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(200,164,92,0.4); }
+
+.btn-secondary {
+  padding: 0.5rem 1.2rem;
+  background: var(--white);
+  color: var(--navy);
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--navy); }
+
+/* Results */
+.results-hidden { display: none; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kpi-card {
+  background: var(--white);
+  border-radius: 10px;
+  padding: 1.25rem;
+  border: 1px solid var(--gray-200);
+  text-align: center;
+}
+.kpi-label { font-size: 0.82rem; color: var(--gray-500); margin-bottom: 0.25rem; }
+.kpi-value { font-size: 1.8rem; font-weight: 700; color: var(--navy); }
+.kpi-unit { font-size: 0.85rem; font-weight: 400; color: var(--gray-500); }
+.kpi-good { color: var(--success); }
+.kpi-warn { color: var(--warn); }
+.kpi-bad { color: var(--danger); }
+
+/* Ratio table */
+.ratio-table { width: 100%; border-collapse: collapse; }
+.ratio-table th, .ratio-table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 0.9rem;
+}
+.ratio-table th {
+  background: var(--gray-100);
+  font-weight: 700;
+  color: var(--navy);
+}
+.ratio-table td:nth-child(2), .ratio-table td:nth-child(3) {
+  text-align: right;
+  white-space: nowrap;
+}
+.ratio-table .section-row td {
+  background: var(--navy);
+  color: var(--white);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+}
+.ratio-table tr:last-child td { border-bottom: none; }
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.badge-good { background: #e8f5e9; color: var(--success); }
+.badge-warn { background: #fff3e0; color: var(--warn); }
+.badge-bad { background: #ffebee; color: var(--danger); }
+
+/* Charts */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.chart-container {
+  background: var(--white);
+  border-radius: 10px;
+  padding: 1.25rem;
+  border: 1px solid var(--gray-200);
+}
+.chart-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+/* BS visual */
+.bs-visual {
+  display: flex;
+  gap: 0;
+  height: 300px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--gray-200);
+  margin-bottom: 1rem;
+}
+.bs-left, .bs-right { flex: 1; display: flex; flex-direction: column; }
+.bs-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 0.5rem;
+  color: var(--white);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: center;
+  min-height: 30px;
+}
+.bs-block-value { font-size: 1rem; font-weight: 700; }
+.bs-block-label { font-size: 0.72rem; opacity: 0.9; }
+
+/* PL visual */
+.pl-waterfall {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 250px;
+  padding: 0 1rem;
+}
+.pl-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  max-width: 100px;
+}
+.pl-bar-fill {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.3rem 0.2rem;
+  color: var(--white);
+  font-size: 0.72rem;
+  font-weight: 700;
+  min-height: 20px;
+}
+.pl-bar-label {
+  font-size: 0.72rem;
+  color: var(--gray-700);
+  margin-top: 0.3rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Note */
+.note {
+  background: #fff8e1;
+  border-left: 3px solid var(--gold);
+  padding: 0.6rem 0.8rem;
+  margin: 0.6rem 0;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+  color: var(--gray-700);
+}
+
+/* Amount display */
+.amount-display {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: 0.9rem;
+}
+.amount-display:last-child { border-bottom: none; }
+.amount-label { color: var(--text-light); }
+.amount-value { font-weight: 500; text-align: right; }
+
+.footer {
+  background: var(--navy-dark);
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  padding: 2rem 1.5rem;
+  margin-top: 3rem;
+  font-size: 0.88rem;
+}
+.footer a { color: var(--gold-light); text-decoration: none; }
+
+@media (max-width: 768px) {
+  .header h1 { font-size: 1.4rem; }
+  .input-grid { grid-template-columns: 1fr; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .tabs { gap: 0; }
+  .tab { padding: 0.6rem 0.8rem; font-size: 0.85rem; }
+}
+
+@media print {
+  .header { padding: 1rem; }
+  .header::after { display: none; }
+  .tabs, .upload-area, .btn-primary, .btn-secondary, #tab-input { display: none; }
+  .tab-panel { display: block !important; }
+  .card { break-inside: avoid; box-shadow: none; }
+  .footer { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img src="https://fintax.jp/wp-content/uploads/2022/07/fintax_logo.svg" alt="FinTax Group" class="header-logo">
+  <h1>財務分析ツール</h1>
+  <p>試算表・決算書データから主要な財務指標を自動算出します</p>
+</header>
+
+<main class="main">
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('input')">データ入力</button>
+    <button class="tab" onclick="switchTab('results')" id="tab-results-btn">分析結果</button>
+    <button class="tab" onclick="switchTab('charts')" id="tab-charts-btn">グラフ</button>
+  </div>
+
+  <!-- ===== 入力タブ ===== -->
+  <div class="tab-panel active" id="tab-input">
+
+    <div class="card">
+      <div class="card-title">CSVアップロード</div>
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('csv-file').click()">
+        <div class="upload-icon">📊</div>
+        <div class="upload-text">クリックまたはドラッグ＆ドロップでCSVファイルを選択</div>
+        <div class="upload-sub">freee会計の試算表エクスポート（CSV）に対応</div>
+        <input type="file" id="csv-file" accept=".csv" onchange="handleFileUpload(event)">
+      </div>
+      <div id="upload-status" style="font-size:0.85rem; color:var(--success); margin-bottom:0.5rem;"></div>
+      <div class="note">「レポート」→「試算表」→「CSV出力」からエクスポートしたファイルをご利用ください。</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">手入力</div>
+
+      <div class="input-grid">
+        <div class="input-section-title">貸借対照表（B/S）</div>
+
+        <div class="input-group">
+          <label>現金・預金</label>
+          <input type="text" id="bs_cash" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>売掛金</label>
+          <input type="text" id="bs_receivables" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>棚卸資産</label>
+          <input type="text" id="bs_inventory" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>その他流動資産</label>
+          <input type="text" id="bs_other_current" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>固定資産</label>
+          <input type="text" id="bs_fixed_assets" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>買掛金</label>
+          <input type="text" id="bs_payables" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>短期借入金</label>
+          <input type="text" id="bs_short_debt" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>その他流動負債</label>
+          <input type="text" id="bs_other_current_liab" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>長期借入金</label>
+          <input type="text" id="bs_long_debt" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>その他固定負債</label>
+          <input type="text" id="bs_other_fixed_liab" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>純資産</label>
+          <input type="text" id="bs_equity" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group"></div>
+
+        <div class="input-section-title">損益計算書（P/L）</div>
+
+        <div class="input-group">
+          <label>売上高</label>
+          <input type="text" id="pl_revenue" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>売上原価</label>
+          <input type="text" id="pl_cogs" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>販管費</label>
+          <input type="text" id="pl_sga" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>営業外収益</label>
+          <input type="text" id="pl_other_income" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>営業外費用</label>
+          <input type="text" id="pl_other_expense" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>特別利益</label>
+          <input type="text" id="pl_extraordinary_income" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>特別損失</label>
+          <input type="text" id="pl_extraordinary_loss" placeholder="0" oninput="formatNumber(this)">
+        </div>
+        <div class="input-group">
+          <label>法人税等</label>
+          <input type="text" id="pl_tax" placeholder="0" oninput="formatNumber(this)">
+        </div>
+      </div>
+
+      <div style="text-align:center;">
+        <button class="btn-primary" onclick="runAnalysis()">分析実行</button>
+        <button class="btn-secondary" onclick="loadSample()" style="margin-left:0.5rem; margin-top:1rem;">サンプルデータで試す</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 分析結果タブ ===== -->
+  <div class="tab-panel" id="tab-results">
+    <div id="results-area" class="results-hidden">
+
+      <!-- KPI -->
+      <div class="kpi-grid" id="kpi-grid"></div>
+
+      <!-- P/L Summary -->
+      <div class="card">
+        <div class="card-title">損益サマリー</div>
+        <div id="pl-summary"></div>
+      </div>
+
+      <!-- Ratio Table -->
+      <div class="card">
+        <div class="card-title">財務指標一覧</div>
+        <table class="ratio-table" id="ratio-table">
+          <thead>
+            <tr><th>指標</th><th>値</th><th>評価</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <!-- B/S Visual -->
+      <div class="card">
+        <div class="card-title">貸借対照表（B/S構成図）</div>
+        <div class="bs-visual" id="bs-visual"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== グラフタブ ===== -->
+  <div class="tab-panel" id="tab-charts">
+    <div id="charts-area" class="results-hidden">
+      <div class="chart-grid">
+        <div class="chart-container">
+          <div class="chart-title">収益性指標</div>
+          <canvas id="chart-profitability"></canvas>
+        </div>
+        <div class="chart-container">
+          <div class="chart-title">安全性指標</div>
+          <canvas id="chart-safety"></canvas>
+        </div>
+        <div class="chart-container">
+          <div class="chart-title">P/L構成</div>
+          <canvas id="chart-pl"></canvas>
+        </div>
+        <div class="chart-container">
+          <div class="chart-title">B/S構成</div>
+          <canvas id="chart-bs"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <p><a href="https://fintax.jp" target="_blank">FinTax Group</a> | 遠藤聡史税理士事務所</p>
+</footer>
+
+<script>
+// ===== Utility =====
+function parseNum(id) {
+  const el = document.getElementById(id);
+  if (!el) return 0;
+  return parseInt(el.value.replace(/,/g, '')) || 0;
+}
+
+function formatNumber(el) {
+  let v = el.value.replace(/[^\d-]/g, '');
+  if (v === '' || v === '-') return;
+  const n = parseInt(v);
+  if (!isNaN(n)) el.value = n.toLocaleString();
+}
+
+function setInput(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val.toLocaleString();
+}
+
+function fmtYen(n) {
+  if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(1) + '億';
+  if (Math.abs(n) >= 10000) return (n / 10000).toFixed(0) + '万';
+  return n.toLocaleString();
+}
+
+function fmtPct(n) { return isFinite(n) ? n.toFixed(1) + '%' : '—'; }
+
+// ===== Tab =====
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`#tab-${name}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ===== File Upload =====
+const uploadArea = document.getElementById('upload-area');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processCSV(file);
+});
+
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (file) processCSV(file);
+}
+
+function processCSV(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      parseFreeeCSV(text);
+      document.getElementById('upload-status').textContent = '✅ ' + file.name + ' を読み込みました';
+    } catch(err) {
+      document.getElementById('upload-status').textContent = '❌ 読み込みエラー: ' + err.message;
+      document.getElementById('upload-status').style.color = 'var(--danger)';
+    }
+  };
+  reader.readAsText(file, 'Shift_JIS');
+}
+
+function parseFreeeCSV(text) {
+  const lines = text.split('\n').map(l => l.split(',').map(c => c.replace(/"/g, '').trim()));
+
+  const mapping = {
+    '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash',
+    '売掛金': 'bs_receivables', '未収入金': 'bs_receivables',
+    '商品': 'bs_inventory', '製品': 'bs_inventory', '原材料': 'bs_inventory', '仕掛品': 'bs_inventory',
+    '買掛金': 'bs_payables', '未払金': 'bs_payables',
+    '短期借入金': 'bs_short_debt',
+    '長期借入金': 'bs_long_debt',
+    '売上高': 'pl_revenue',
+    '売上原価': 'pl_cogs',
+    '法人税、住民税及び事業税': 'pl_tax', '法人税等': 'pl_tax',
+  };
+
+  const sums = {};
+  for (const line of lines) {
+    if (line.length < 2) continue;
+    const name = line[0];
+    // Try to find closing balance (last numeric column) or amount
+    let amount = 0;
+    for (let i = line.length - 1; i >= 1; i--) {
+      const v = parseInt(line[i].replace(/,/g, ''));
+      if (!isNaN(v) && v !== 0) { amount = v; break; }
+    }
+
+    for (const [key, field] of Object.entries(mapping)) {
+      if (name.includes(key)) {
+        sums[field] = (sums[field] || 0) + amount;
+      }
+    }
+
+    // Category-level detection
+    if (name.includes('流動資産') && name.includes('合計')) {
+      const ca = amount;
+      sums['_current_assets'] = ca;
+    }
+    if (name.includes('固定資産') && name.includes('合計')) {
+      sums['bs_fixed_assets'] = amount;
+    }
+    if (name.includes('流動負債') && name.includes('合計')) {
+      sums['_current_liab'] = amount;
+    }
+    if (name.includes('固定負債') && name.includes('合計')) {
+      sums['_fixed_liab'] = amount;
+    }
+    if (name.includes('純資産') && name.includes('合計')) {
+      sums['bs_equity'] = amount;
+    }
+    if (name.includes('販売費及び一般管理費') && name.includes('合計')) {
+      sums['pl_sga'] = amount;
+    }
+    if (name.includes('営業外収益') && name.includes('合計')) {
+      sums['pl_other_income'] = amount;
+    }
+    if (name.includes('営業外費用') && name.includes('合計')) {
+      sums['pl_other_expense'] = amount;
+    }
+    if (name.includes('特別利益') && name.includes('合計')) {
+      sums['pl_extraordinary_income'] = amount;
+    }
+    if (name.includes('特別損失') && name.includes('合計')) {
+      sums['pl_extraordinary_loss'] = amount;
+    }
+  }
+
+  // Set values to form
+  for (const [field, val] of Object.entries(sums)) {
+    if (!field.startsWith('_')) setInput(field, val);
+  }
+
+  // Calculate "other" categories
+  const ca = sums['_current_assets'] || 0;
+  const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
+  if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
+
+  const cl = sums['_current_liab'] || 0;
+  const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
+  if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
+
+  const fl = sums['_fixed_liab'] || 0;
+  const knownFL = (sums['bs_long_debt']||0);
+  if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
+}
+
+// ===== Sample Data =====
+function loadSample() {
+  setInput('bs_cash', 15000000);
+  setInput('bs_receivables', 8000000);
+  setInput('bs_inventory', 3000000);
+  setInput('bs_other_current', 1000000);
+  setInput('bs_fixed_assets', 12000000);
+  setInput('bs_payables', 5000000);
+  setInput('bs_short_debt', 3000000);
+  setInput('bs_other_current_liab', 2000000);
+  setInput('bs_long_debt', 8000000);
+  setInput('bs_other_fixed_liab', 1000000);
+  setInput('bs_equity', 20000000);
+  setInput('pl_revenue', 60000000);
+  setInput('pl_cogs', 36000000);
+  setInput('pl_sga', 18000000);
+  setInput('pl_other_income', 200000);
+  setInput('pl_other_expense', 400000);
+  setInput('pl_extraordinary_income', 0);
+  setInput('pl_extraordinary_loss', 100000);
+  setInput('pl_tax', 1700000);
+}
+
+// ===== Analysis =====
+function runAnalysis() {
+  // Gather BS
+  const cash = parseNum('bs_cash');
+  const receivables = parseNum('bs_receivables');
+  const inventory = parseNum('bs_inventory');
+  const otherCurrent = parseNum('bs_other_current');
+  const fixedAssets = parseNum('bs_fixed_assets');
+
+  const payables = parseNum('bs_payables');
+  const shortDebt = parseNum('bs_short_debt');
+  const otherCurrentLiab = parseNum('bs_other_current_liab');
+  const longDebt = parseNum('bs_long_debt');
+  const otherFixedLiab = parseNum('bs_other_fixed_liab');
+  const equity = parseNum('bs_equity');
+
+  const currentAssets = cash + receivables + inventory + otherCurrent;
+  const totalAssets = currentAssets + fixedAssets;
+  const currentLiab = payables + shortDebt + otherCurrentLiab;
+  const fixedLiab = longDebt + otherFixedLiab;
+  const totalLiab = currentLiab + fixedLiab;
+
+  // Gather PL
+  const revenue = parseNum('pl_revenue');
+  const cogs = parseNum('pl_cogs');
+  const sga = parseNum('pl_sga');
+  const otherIncome = parseNum('pl_other_income');
+  const otherExpense = parseNum('pl_other_expense');
+  const extraIncome = parseNum('pl_extraordinary_income');
+  const extraLoss = parseNum('pl_extraordinary_loss');
+  const tax = parseNum('pl_tax');
+
+  const grossProfit = revenue - cogs;
+  const operatingProfit = grossProfit - sga;
+  const ordinaryProfit = operatingProfit + otherIncome - otherExpense;
+  const preTaxProfit = ordinaryProfit + extraIncome - extraLoss;
+  const netProfit = preTaxProfit - tax;
+
+  // Ratios
+  const grossMargin = revenue ? (grossProfit / revenue) * 100 : 0;
+  const operatingMargin = revenue ? (operatingProfit / revenue) * 100 : 0;
+  const ordinaryMargin = revenue ? (ordinaryProfit / revenue) * 100 : 0;
+  const netMargin = revenue ? (netProfit / revenue) * 100 : 0;
+  const roa = totalAssets ? (ordinaryProfit / totalAssets) * 100 : 0;
+  const roe = equity ? (netProfit / equity) * 100 : 0;
+
+  const currentRatio = currentLiab ? (currentAssets / currentLiab) * 100 : 0;
+  const quickRatio = currentLiab ? ((cash + receivables) / currentLiab) * 100 : 0;
+  const equityRatio = totalAssets ? (equity / totalAssets) * 100 : 0;
+  const debtRatio = equity ? (totalLiab / equity) * 100 : 0;
+
+  const assetTurnover = totalAssets ? revenue / totalAssets : 0;
+  const receivableDays = revenue ? (receivables / revenue) * 365 : 0;
+  const inventoryDays = cogs ? (inventory / cogs) * 365 : 0;
+  const payableDays = cogs ? (payables / cogs) * 365 : 0;
+
+  // Data object
+  const data = {
+    bs: { cash, receivables, inventory, otherCurrent, fixedAssets, currentAssets, totalAssets,
+          payables, shortDebt, otherCurrentLiab, longDebt, otherFixedLiab, currentLiab, fixedLiab, totalLiab, equity },
+    pl: { revenue, cogs, sga, otherIncome, otherExpense, extraIncome, extraLoss, tax,
+          grossProfit, operatingProfit, ordinaryProfit, preTaxProfit, netProfit },
+    ratios: {
+      grossMargin, operatingMargin, ordinaryMargin, netMargin, roa, roe,
+      currentRatio, quickRatio, equityRatio, debtRatio,
+      assetTurnover, receivableDays, inventoryDays, payableDays
+    }
+  };
+
+  renderResults(data);
+  renderCharts(data);
+
+  // Switch to results tab
+  switchTabDirect('results');
+}
+
+function switchTabDirect(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.getElementById(`tab-${name}-btn`).classList.add('active');
+}
+
+// ===== Render Results =====
+function renderResults(data) {
+  const { ratios, pl, bs } = data;
+
+  document.getElementById('results-area').classList.remove('results-hidden');
+  document.getElementById('charts-area').classList.remove('results-hidden');
+
+  // KPI cards
+  const kpiGrid = document.getElementById('kpi-grid');
+  const kpis = [
+    { label: '売上高', value: fmtYen(pl.revenue), unit: '円' },
+    { label: '経常利益', value: fmtYen(pl.ordinaryProfit), unit: '円',
+      cls: pl.ordinaryProfit > 0 ? 'kpi-good' : 'kpi-bad' },
+    { label: '経常利益率', value: ratios.ordinaryMargin.toFixed(1), unit: '%',
+      cls: ratios.ordinaryMargin >= 5 ? 'kpi-good' : ratios.ordinaryMargin >= 0 ? 'kpi-warn' : 'kpi-bad' },
+    { label: '自己資本比率', value: ratios.equityRatio.toFixed(1), unit: '%',
+      cls: ratios.equityRatio >= 40 ? 'kpi-good' : ratios.equityRatio >= 20 ? 'kpi-warn' : 'kpi-bad' },
+  ];
+
+  kpiGrid.innerHTML = kpis.map(k => `
+    <div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value ${k.cls || ''}">${k.value}<span class="kpi-unit">${k.unit}</span></div>
+    </div>
+  `).join('');
+
+  // PL Summary
+  const plSummary = document.getElementById('pl-summary');
+  const plItems = [
+    ['売上高', pl.revenue],
+    ['売上原価', -pl.cogs],
+    ['売上総利益', pl.grossProfit],
+    ['販管費', -pl.sga],
+    ['営業利益', pl.operatingProfit],
+    ['営業外損益', pl.otherIncome - pl.otherExpense],
+    ['経常利益', pl.ordinaryProfit],
+    ['特別損益', pl.extraIncome - pl.extraLoss],
+    ['税引前当期純利益', pl.preTaxProfit],
+    ['法人税等', -pl.tax],
+    ['当期純利益', pl.netProfit],
+  ];
+  plSummary.innerHTML = plItems.map(([label, val]) => {
+    const isSubtotal = ['売上総利益','営業利益','経常利益','税引前当期純利益','当期純利益'].includes(label);
+    return `<div class="amount-display" style="${isSubtotal ? 'font-weight:700;border-bottom:2px solid var(--gray-200);' : ''}">
+      <span class="amount-label">${label}</span>
+      <span class="amount-value" style="${val < 0 ? 'color:var(--danger)' : ''}">${val.toLocaleString()} 円</span>
+    </div>`;
+  }).join('');
+
+  // Ratio Table
+  function badge(val, good, warn) {
+    if (val >= good) return '<span class="badge badge-good">良好</span>';
+    if (val >= warn) return '<span class="badge badge-warn">注意</span>';
+    return '<span class="badge badge-bad">要改善</span>';
+  }
+
+  const tbody = document.querySelector('#ratio-table tbody');
+  tbody.innerHTML = `
+    <tr class="section-row"><td colspan="3">収益性</td></tr>
+    <tr><td>売上総利益率</td><td>${fmtPct(ratios.grossMargin)}</td><td>${badge(ratios.grossMargin, 30, 15)}</td></tr>
+    <tr><td>営業利益率</td><td>${fmtPct(ratios.operatingMargin)}</td><td>${badge(ratios.operatingMargin, 5, 1)}</td></tr>
+    <tr><td>経常利益率</td><td>${fmtPct(ratios.ordinaryMargin)}</td><td>${badge(ratios.ordinaryMargin, 5, 1)}</td></tr>
+    <tr><td>当期純利益率</td><td>${fmtPct(ratios.netMargin)}</td><td>${badge(ratios.netMargin, 3, 0)}</td></tr>
+    <tr><td>ROA（総資産利益率）</td><td>${fmtPct(ratios.roa)}</td><td>${badge(ratios.roa, 5, 2)}</td></tr>
+    <tr><td>ROE（自己資本利益率）</td><td>${fmtPct(ratios.roe)}</td><td>${badge(ratios.roe, 8, 3)}</td></tr>
+    <tr class="section-row"><td colspan="3">安全性</td></tr>
+    <tr><td>流動比率</td><td>${fmtPct(ratios.currentRatio)}</td><td>${badge(ratios.currentRatio, 200, 120)}</td></tr>
+    <tr><td>当座比率</td><td>${fmtPct(ratios.quickRatio)}</td><td>${badge(ratios.quickRatio, 100, 70)}</td></tr>
+    <tr><td>自己資本比率</td><td>${fmtPct(ratios.equityRatio)}</td><td>${badge(ratios.equityRatio, 40, 20)}</td></tr>
+    <tr><td>負債比率</td><td>${fmtPct(ratios.debtRatio)}</td><td>${badge(300 - ratios.debtRatio, 200, 100)}</td></tr>
+    <tr class="section-row"><td colspan="3">効率性</td></tr>
+    <tr><td>総資本回転率</td><td>${ratios.assetTurnover.toFixed(2)} 回</td><td>${badge(ratios.assetTurnover, 1.0, 0.5)}</td></tr>
+    <tr><td>売上債権回転期間</td><td>${ratios.receivableDays.toFixed(0)} 日</td><td>${badge(90 - ratios.receivableDays, 30, 0)}</td></tr>
+    <tr><td>棚卸資産回転期間</td><td>${ratios.inventoryDays.toFixed(0)} 日</td><td>${badge(60 - ratios.inventoryDays, 0, -30)}</td></tr>
+    <tr><td>仕入債務回転期間</td><td>${ratios.payableDays.toFixed(0)} 日</td><td>—</td></tr>
+  `;
+
+  // BS Visual
+  const bsVis = document.getElementById('bs-visual');
+  const total = Math.max(bs.totalAssets, bs.totalLiab + bs.equity, 1);
+  const pct = v => Math.max((v / total) * 100, 0);
+
+  bsVis.innerHTML = `
+    <div class="bs-left">
+      <div class="bs-block" style="flex:${pct(bs.currentAssets)};background:#4fc3f7;">
+        <div class="bs-block-label">流動資産</div>
+        <div class="bs-block-value">${fmtYen(bs.currentAssets)}</div>
+      </div>
+      <div class="bs-block" style="flex:${pct(bs.fixedAssets)};background:#0288d1;">
+        <div class="bs-block-label">固定資産</div>
+        <div class="bs-block-value">${fmtYen(bs.fixedAssets)}</div>
+      </div>
+    </div>
+    <div class="bs-right">
+      <div class="bs-block" style="flex:${pct(bs.currentLiab)};background:#ef5350;">
+        <div class="bs-block-label">流動負債</div>
+        <div class="bs-block-value">${fmtYen(bs.currentLiab)}</div>
+      </div>
+      <div class="bs-block" style="flex:${pct(bs.fixedLiab)};background:#c62828;">
+        <div class="bs-block-label">固定負債</div>
+        <div class="bs-block-value">${fmtYen(bs.fixedLiab)}</div>
+      </div>
+      <div class="bs-block" style="flex:${pct(bs.equity)};background:#2e7d32;">
+        <div class="bs-block-label">純資産</div>
+        <div class="bs-block-value">${fmtYen(bs.equity)}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ===== Charts =====
+let charts = {};
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+}
+
+function renderCharts(data) {
+  destroyCharts();
+  const { ratios, pl, bs } = data;
+
+  // Profitability bar chart
+  charts.profitability = new Chart(document.getElementById('chart-profitability'), {
+    type: 'bar',
+    data: {
+      labels: ['売上総利益率', '営業利益率', '経常利益率', '純利益率', 'ROA', 'ROE'],
+      datasets: [{
+        data: [ratios.grossMargin, ratios.operatingMargin, ratios.ordinaryMargin, ratios.netMargin, ratios.roa, ratios.roe],
+        backgroundColor: ['#42a5f5','#66bb6a','#ffa726','#ef5350','#ab47bc','#26c6da'],
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => v + '%' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // Safety radar chart
+  charts.safety = new Chart(document.getElementById('chart-safety'), {
+    type: 'radar',
+    data: {
+      labels: ['流動比率', '当座比率', '自己資本比率', '総資本回転率×100'],
+      datasets: [{
+        label: '当社',
+        data: [
+          Math.min(ratios.currentRatio, 400),
+          Math.min(ratios.quickRatio, 300),
+          ratios.equityRatio,
+          ratios.assetTurnover * 100
+        ],
+        backgroundColor: 'rgba(200,164,92,0.2)',
+        borderColor: 'rgba(200,164,92,1)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgba(200,164,92,1)',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        r: { beginAtZero: true, ticks: { display: false } }
+      }
+    }
+  });
+
+  // PL waterfall (doughnut)
+  charts.pl = new Chart(document.getElementById('chart-pl'), {
+    type: 'doughnut',
+    data: {
+      labels: ['売上原価', '販管費', '営業外費用', '特別損失', '法人税等', '当期純利益'],
+      datasets: [{
+        data: [pl.cogs, pl.sga, pl.otherExpense, pl.extraLoss, pl.tax, Math.max(pl.netProfit, 0)],
+        backgroundColor: ['#ef5350','#ff7043','#ffa726','#ffca28','#bdbdbd','#66bb6a'],
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed.toLocaleString() + '円' } }
+      }
+    }
+  });
+
+  // BS composition (stacked bar)
+  charts.bs = new Chart(document.getElementById('chart-bs'), {
+    type: 'bar',
+    data: {
+      labels: ['資産', '負債・純資産'],
+      datasets: [
+        { label: '流動資産', data: [bs.currentAssets, 0], backgroundColor: '#4fc3f7' },
+        { label: '固定資産', data: [bs.fixedAssets, 0], backgroundColor: '#0288d1' },
+        { label: '流動負債', data: [0, bs.currentLiab], backgroundColor: '#ef5350' },
+        { label: '固定負債', data: [0, bs.fixedLiab], backgroundColor: '#c62828' },
+        { label: '純資産', data: [0, bs.equity], backgroundColor: '#2e7d32' },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + '円' } }
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, ticks: { callback: v => fmtYen(v) } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
