@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -334,6 +336,55 @@ body {
   white-space: nowrap;
 }
 
+/* Period input */
+.period-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.period-row label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--gray-700);
+}
+.period-row input[type="date"] {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+.period-row input[type="date"]:focus { outline: none; border-color: var(--gold); }
+.period-separator { color: var(--gray-500); font-size: 1.1rem; }
+.period-display {
+  font-size: 0.95rem;
+  color: var(--navy);
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background: var(--gray-100);
+  border-radius: 6px;
+}
+
+/* File type pills */
+.file-types {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+.file-type-pill {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  background: var(--gray-200);
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
 /* Note */
 .note {
   background: #fff8e1;
@@ -379,7 +430,7 @@ body {
 @media print {
   .header { padding: 1rem; }
   .header::after { display: none; }
-  .tabs, .upload-area, .btn-primary, .btn-secondary, #tab-input { display: none; }
+  .tabs, .upload-area, .btn-primary, .btn-secondary, #tab-input, .file-types { display: none; }
   .tab-panel { display: block !important; }
   .card { break-inside: avoid; box-shadow: none; }
   .footer { display: none; }
@@ -406,15 +457,30 @@ body {
   <div class="tab-panel active" id="tab-input">
 
     <div class="card">
-      <div class="card-title">CSVアップロード</div>
-      <div class="upload-area" id="upload-area" onclick="document.getElementById('csv-file').click()">
+      <div class="card-title">分析期間</div>
+      <div class="period-row">
+        <label>開始日</label>
+        <input type="date" id="period-start">
+        <span class="period-separator">〜</span>
+        <label>終了日</label>
+        <input type="date" id="period-end">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ファイルアップロード</div>
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('data-file').click()">
         <div class="upload-icon">📊</div>
-        <div class="upload-text">クリックまたはドラッグ＆ドロップでCSVファイルを選択</div>
-        <div class="upload-sub">freee会計の試算表エクスポート（CSV）に対応</div>
-        <input type="file" id="csv-file" accept=".csv" onchange="handleFileUpload(event)">
+        <div class="upload-text">クリックまたはドラッグ＆ドロップでファイルを選択</div>
+        <div class="upload-sub">freee会計の試算表エクスポートに対応</div>
+        <div class="file-types">
+          <span class="file-type-pill">CSV</span>
+          <span class="file-type-pill">PDF</span>
+        </div>
+        <input type="file" id="data-file" accept=".csv,.pdf" onchange="handleFileUpload(event)">
       </div>
       <div id="upload-status" style="font-size:0.85rem; color:var(--success); margin-bottom:0.5rem;"></div>
-      <div class="note">「レポート」→「試算表」→「CSV出力」からエクスポートしたファイルをご利用ください。</div>
+      <div class="note">「レポート」→「試算表」→「CSV出力」または「PDF出力」からエクスポートしたファイルをご利用ください。</div>
     </div>
 
     <div class="card">
@@ -515,6 +581,9 @@ body {
   <!-- ===== 分析結果タブ ===== -->
   <div class="tab-panel" id="tab-results">
     <div id="results-area" class="results-hidden">
+
+      <!-- Period Display -->
+      <div class="period-display" id="results-period" style="display:none;"></div>
 
       <!-- KPI -->
       <div class="kpi-grid" id="kpi-grid"></div>
@@ -619,12 +688,23 @@ uploadArea.addEventListener('drop', e => {
   e.preventDefault();
   uploadArea.classList.remove('dragover');
   const file = e.dataTransfer.files[0];
-  if (file) processCSV(file);
+  if (file) processFile(file);
 });
 
 function handleFileUpload(e) {
   const file = e.target.files[0];
-  if (file) processCSV(file);
+  if (file) processFile(file);
+}
+
+function processFile(file) {
+  const statusEl = document.getElementById('upload-status');
+  statusEl.style.color = 'var(--success)';
+
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    processPDF(file);
+  } else {
+    processCSV(file);
+  }
 }
 
 function processCSV(file) {
@@ -633,13 +713,151 @@ function processCSV(file) {
     try {
       const text = e.target.result;
       parseFreeeCSV(text);
-      document.getElementById('upload-status').textContent = '✅ ' + file.name + ' を読み込みました';
+      document.getElementById('upload-status').textContent = '✅ ' + file.name + ' を読み込みました（CSV）';
     } catch(err) {
       document.getElementById('upload-status').textContent = '❌ 読み込みエラー: ' + err.message;
       document.getElementById('upload-status').style.color = 'var(--danger)';
     }
   };
   reader.readAsText(file, 'Shift_JIS');
+}
+
+async function processPDF(file) {
+  const statusEl = document.getElementById('upload-status');
+  statusEl.textContent = '⏳ PDF読み込み中...';
+
+  try {
+    if (!window.pdfjsLib) throw new Error('PDF.jsの読み込みに失敗しました。ページを再読み込みしてください。');
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const lines = [];
+      let lastY = null;
+      let currentLine = '';
+
+      for (const item of content.items) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 3) {
+          lines.push(currentLine);
+          currentLine = '';
+        }
+        currentLine += item.str + '\t';
+        lastY = item.transform[5];
+      }
+      if (currentLine) lines.push(currentLine);
+      fullText += lines.join('\n') + '\n';
+    }
+
+    parseFreePDF(fullText);
+    statusEl.textContent = '✅ ' + file.name + ' を読み込みました（PDF / ' + pdf.numPages + 'ページ）';
+  } catch(err) {
+    statusEl.textContent = '❌ PDF読み込みエラー: ' + err.message;
+    statusEl.style.color = 'var(--danger)';
+  }
+}
+
+function parseFreePDF(text) {
+  const lines = text.split('\n');
+
+  // Try to detect period from PDF header
+  for (const line of lines.slice(0, 20)) {
+    // Match patterns like "2025年01月01日" ~ "2025年12月31日" or "2025/01/01" ~ "2025/12/31"
+    const periodMatch = line.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})[日]?\s*[〜～~―\-]+\s*(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
+    if (periodMatch) {
+      const [, y1, m1, d1, y2, m2, d2] = periodMatch;
+      document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-${d1.padStart(2,'0')}`;
+      document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${d2.padStart(2,'0')}`;
+    }
+  }
+
+  // Parse amounts from PDF text
+  // freee PDF format: account name followed by amounts (tab-separated)
+  const sums = {};
+
+  function extractAmount(line) {
+    // Find numbers in the line (may have commas, may be negative)
+    const nums = line.match(/[-]?[\d,]+/g);
+    if (!nums) return 0;
+    // Try last meaningful number as closing balance
+    for (let i = nums.length - 1; i >= 0; i--) {
+      const v = parseInt(nums[i].replace(/,/g, ''));
+      if (!isNaN(v) && v !== 0) return v;
+    }
+    return 0;
+  }
+
+  // BS mappings
+  const bsMapping = {
+    '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash',
+    '売掛金': 'bs_receivables', '未収入金': 'bs_receivables',
+    '商品': 'bs_inventory', '製品': 'bs_inventory', '原材料': 'bs_inventory', '仕掛品': 'bs_inventory',
+    '買掛金': 'bs_payables', '未払金': 'bs_payables',
+    '短期借入金': 'bs_short_debt',
+    '長期借入金': 'bs_long_debt',
+  };
+
+  // PL mappings
+  const plMapping = {
+    '売上高': 'pl_revenue',
+    '売上原価': 'pl_cogs',
+    '法人税、住民税及び事業税': 'pl_tax', '法人税等': 'pl_tax',
+  };
+
+  const allMapping = { ...bsMapping, ...plMapping };
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const amount = extractAmount(line);
+    if (amount === 0) continue;
+
+    // Individual account matching
+    for (const [key, field] of Object.entries(allMapping)) {
+      if (line.includes(key)) {
+        sums[field] = (sums[field] || 0) + amount;
+      }
+    }
+
+    // Category totals
+    if (line.includes('流動資産') && (line.includes('合計') || line.includes('計'))) sums['_current_assets'] = amount;
+    if (line.includes('固定資産') && (line.includes('合計') || line.includes('計'))) sums['bs_fixed_assets'] = amount;
+    if (line.includes('流動負債') && (line.includes('合計') || line.includes('計'))) sums['_current_liab'] = amount;
+    if (line.includes('固定負債') && (line.includes('合計') || line.includes('計'))) sums['_fixed_liab'] = amount;
+    if (line.includes('純資産') && (line.includes('合計') || line.includes('計'))) sums['bs_equity'] = amount;
+    if (line.includes('資本') && line.includes('合計') && !line.includes('回転')) sums['bs_equity'] = sums['bs_equity'] || amount;
+    if (line.includes('販売費及び一般管理費') && (line.includes('合計') || line.includes('計'))) sums['pl_sga'] = amount;
+    if (line.includes('経費') && line.includes('計') && !sums['pl_sga']) sums['pl_sga'] = amount;
+    if (line.includes('営業外収益') && (line.includes('合計') || line.includes('計'))) sums['pl_other_income'] = amount;
+    if (line.includes('営業外費用') && (line.includes('合計') || line.includes('計'))) sums['pl_other_expense'] = amount;
+    if (line.includes('特別利益') && (line.includes('合計') || line.includes('計'))) sums['pl_extraordinary_income'] = amount;
+    if (line.includes('特別損失') && (line.includes('合計') || line.includes('計'))) sums['pl_extraordinary_loss'] = amount;
+
+    // freee individual proprietorship: 収入金額 as revenue
+    if (line.includes('収入金額') && (line.includes('合計') || line.includes('計'))) {
+      if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
+    }
+  }
+
+  // Set values to form
+  for (const [field, val] of Object.entries(sums)) {
+    if (!field.startsWith('_')) setInput(field, val);
+  }
+
+  // Calculate "other" categories
+  const ca = sums['_current_assets'] || 0;
+  const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
+  if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
+
+  const cl = sums['_current_liab'] || 0;
+  const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
+  if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
+
+  const fl = sums['_fixed_liab'] || 0;
+  const knownFL = (sums['bs_long_debt']||0);
+  if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
 }
 
 function parseFreeeCSV(text) {
@@ -819,6 +1037,11 @@ function runAnalysis() {
     }
   };
 
+  // Period info
+  const periodStart = document.getElementById('period-start').value;
+  const periodEnd = document.getElementById('period-end').value;
+  data.period = { start: periodStart, end: periodEnd };
+
   renderResults(data);
   renderCharts(data);
 
@@ -839,6 +1062,21 @@ function renderResults(data) {
 
   document.getElementById('results-area').classList.remove('results-hidden');
   document.getElementById('charts-area').classList.remove('results-hidden');
+
+  // Period display
+  const periodEl = document.getElementById('results-period');
+  if (data.period && data.period.start && data.period.end) {
+    const fmt = d => { const p = d.split('-'); return p[0] + '年' + parseInt(p[1]) + '月' + parseInt(p[2]) + '日'; };
+    periodEl.textContent = '📅 分析期間：' + fmt(data.period.start) + ' 〜 ' + fmt(data.period.end);
+    periodEl.style.display = 'block';
+  } else if (data.period && (data.period.start || data.period.end)) {
+    const d = data.period.start || data.period.end;
+    const p = d.split('-');
+    periodEl.textContent = '📅 ' + p[0] + '年' + parseInt(p[1]) + '月' + parseInt(p[2]) + '日 時点';
+    periodEl.style.display = 'block';
+  } else {
+    periodEl.style.display = 'none';
+  }
 
   // KPI cards
   const kpiGrid = document.getElementById('kpi-grid');
