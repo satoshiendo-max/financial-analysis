@@ -913,91 +913,137 @@ function parseFreeeCSV(text, type) {
   // Try to detect period from CSV header rows
   for (const line of lines.slice(0, 10)) {
     const joined = line.join(' ');
-    // Pattern 1: dates on same field "2025年01月01日〜2025年12月31日"
-    // Pattern 2: dates in separate fields "2025年01月01日", "〜", "2025年12月31日"
-    const periodMatch = joined.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})[日]?\s*[,\s]*[〜～~―\-]+[,\s]*\s*(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
-    if (periodMatch) {
-      const [, y1, m1, d1, y2, m2, d2] = periodMatch;
+    // Pattern 1: full date "2025年01月01日 〜 2025年12月31日"
+    const p1 = joined.match(/(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})[日]?\s*[,\s]*[〜～~―\-]+[,\s]*\s*(\d{4})[年\/](\d{1,2})[月\/](\d{1,2})/);
+    if (p1) {
+      const [, y1, m1, d1, y2, m2, d2] = p1;
       document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-${d1.padStart(2,'0')}`;
       document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${d2.padStart(2,'0')}`;
     }
+    // Pattern 2: month only "2025年03月～2026年02月"
+    if (!p1) {
+      const p2 = joined.match(/(\d{4})年(\d{1,2})月\s*[〜～~―\-]+\s*(\d{4})年(\d{1,2})月/);
+      if (p2) {
+        const [, y1, m1, y2, m2] = p2;
+        document.getElementById('period-start').value = `${y1}-${m1.padStart(2,'0')}-01`;
+        const lastDay = new Date(parseInt(y2), parseInt(m2), 0).getDate();
+        document.getElementById('period-end').value = `${y2}-${m2.padStart(2,'0')}-${lastDay}`;
+      }
+    }
   }
 
+  // freee CSV: account names use column indentation for hierarchy.
+  // Join all columns for full text matching.
   const bsMapping = {
-    '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash',
+    '現金': 'bs_cash', '普通預金': 'bs_cash', '当座預金': 'bs_cash', '円普通預金': 'bs_cash',
     '売掛金': 'bs_receivables', '未収入金': 'bs_receivables',
     '商品': 'bs_inventory', '製品': 'bs_inventory', '原材料': 'bs_inventory', '仕掛品': 'bs_inventory',
-    '買掛金': 'bs_payables', '未払金': 'bs_payables',
-    '短期借入金': 'bs_short_debt',
+    '買掛金': 'bs_payables',
+    '短期借入金': 'bs_short_debt', '役員借入金': 'bs_short_debt',
     '長期借入金': 'bs_long_debt',
   };
 
   const plMapping = {
-    '売上高': 'pl_revenue',
-    '売上原価': 'pl_cogs',
-    '法人税、住民税及び事業税': 'pl_tax', '法人税等': 'pl_tax',
+    '法人税・住民税及び事業税': 'pl_tax', '法人税、住民税及び事業税': 'pl_tax',
   };
 
-  // Use appropriate mapping based on upload type
   const mapping = type === 'bs' ? bsMapping : type === 'pl' ? plMapping : { ...bsMapping, ...plMapping };
 
   const sums = {};
+
   for (const line of lines) {
     if (line.length < 2) continue;
-    const name = line[0];
+
+    // Join non-empty columns for keyword matching
+    const fullText = line.filter(c => c.trim()).join(' ');
+    if (!fullText) continue;
+
+    // Is this a summary/total line?
+    const isSummary = line.some(c => {
+      const t = c.trim();
+      return t.endsWith('計') || t.endsWith('金額');
+    });
+
+    // Extract amount: last non-zero integer, skip percentage columns
     let amount = 0;
-    for (let i = line.length - 1; i >= 1; i--) {
-      const v = parseInt(line[i].replace(/,/g, ''));
-      if (!isNaN(v) && v !== 0) { amount = v; break; }
+    for (let i = line.length - 1; i >= 0; i--) {
+      const cleaned = line[i].replace(/,/g, '').trim();
+      if (cleaned.includes('.')) continue;
+      const v = parseInt(cleaned);
+      if (!isNaN(v) && cleaned !== '') { amount = v; break; }
     }
 
-    for (const [key, field] of Object.entries(mapping)) {
-      if (name.includes(key)) {
-        sums[field] = (sums[field] || 0) + amount;
+    // Individual account matching (non-summary lines)
+    // Match only ONCE per line to avoid double counting (e.g. '普通預金' and '円普通預金')
+    if (!isSummary && amount !== 0) {
+      let matched = false;
+      for (const [key, field] of Object.entries(mapping)) {
+        if (fullText.includes(key) && !matched) {
+          sums[field] = (sums[field] || 0) + amount;
+          matched = true;
+        }
+      }
+      // BS: 未払金 (exclude 未払法人税等)
+      if (!matched && type !== 'pl' && fullText.includes('未払金') && !fullText.includes('未払法人税')) {
+        sums['bs_payables'] = (sums['bs_payables'] || 0) + amount;
       }
     }
 
     // BS category totals
-    if (type !== 'pl') {
-      if (name.includes('流動資産') && name.includes('合計')) sums['_current_assets'] = amount;
-      if (name.includes('固定資産') && name.includes('合計')) sums['bs_fixed_assets'] = amount;
-      if (name.includes('流動負債') && name.includes('合計')) sums['_current_liab'] = amount;
-      if (name.includes('固定負債') && name.includes('合計')) sums['_fixed_liab'] = amount;
-      if (name.includes('純資産') && name.includes('合計')) sums['bs_equity'] = amount;
-      if (name.includes('資本') && name.includes('合計') && !name.includes('回転')) sums['bs_equity'] = sums['bs_equity'] || amount;
+    if (type !== 'pl' && isSummary) {
+      if (fullText.includes('流動資産')) sums['_current_assets'] = amount;
+      if (fullText.includes('固定資産')) sums['bs_fixed_assets'] = amount;
+      if (fullText.includes('流動負債')) sums['_current_liab'] = amount;
+      if (fullText.includes('固定負債')) sums['_fixed_liab'] = amount;
+      if (fullText.includes('純資産')) sums['bs_equity'] = amount;
+      if (fullText.includes('株主資本') && !sums['bs_equity']) sums['bs_equity'] = amount;
+      if (fullText.includes('資本') && fullText.includes('計') && !fullText.includes('負債') && !fullText.includes('回転')) {
+        sums['bs_equity'] = sums['bs_equity'] || amount;
+      }
     }
 
     // PL category totals
     if (type !== 'bs') {
-      if (name.includes('販売費及び一般管理費') && name.includes('合計')) sums['pl_sga'] = amount;
-      if (name.includes('経費') && name.includes('計') && !sums['pl_sga']) sums['pl_sga'] = amount;
-      if (name.includes('営業外収益') && name.includes('合計')) sums['pl_other_income'] = amount;
-      if (name.includes('営業外費用') && name.includes('合計')) sums['pl_other_expense'] = amount;
-      if (name.includes('特別利益') && name.includes('合計')) sums['pl_extraordinary_income'] = amount;
-      if (name.includes('特別損失') && name.includes('合計')) sums['pl_extraordinary_loss'] = amount;
-      if (name.includes('収入金額') && (name.includes('合計') || name.includes('計'))) {
-        if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
+      if (isSummary) {
+        if (fullText.includes('売上高') && amount > 0) sums['pl_revenue'] = sums['pl_revenue'] || amount;
+        if (fullText.includes('売上原価')) sums['pl_cogs'] = sums['pl_cogs'] || amount;
+        if (fullText.includes('販売管理費') || fullText.includes('販売費及び一般管理費')) sums['pl_sga'] = amount;
+        if (fullText.includes('経費') && !sums['pl_sga']) sums['pl_sga'] = amount;
+        if (fullText.includes('収入金額') && amount > 0) {
+          if (!sums['pl_revenue'] || amount > sums['pl_revenue']) sums['pl_revenue'] = amount;
+        }
+      }
+      // Non-operating income/expense
+      if (fullText.includes('営業外収益') && !fullText.includes('費用') && amount > 0) sums['pl_other_income'] = amount;
+      if (fullText.includes('営業外費用') && amount > 0) sums['pl_other_expense'] = amount;
+      if (fullText.includes('特別利益') && amount > 0) sums['pl_extraordinary_income'] = amount;
+      if (fullText.includes('特別損失') && amount > 0) sums['pl_extraordinary_loss'] = amount;
+      // Tax line (not summary, not adjustment)
+      if (!isSummary && fullText.includes('法人税') && !fullText.includes('調整') && !fullText.includes('税引') && amount > 0) {
+        sums['pl_tax'] = amount;
       }
     }
   }
 
+  console.log('[CSV Parse] type:', type, 'sums:', JSON.stringify(sums));
+
   // Set values to form
   for (const [field, val] of Object.entries(sums)) {
-    if (!field.startsWith('_')) setInput(field, val);
+    if (!field.startsWith('_')) setInput(field, Math.abs(val));
   }
 
   // Calculate "other" categories (BS only)
   if (type !== 'pl') {
-    const ca = sums['_current_assets'] || 0;
-    const knownCA = (sums['bs_cash']||0) + (sums['bs_receivables']||0) + (sums['bs_inventory']||0);
+    const ca = Math.abs(sums['_current_assets'] || 0);
+    const knownCA = Math.abs(sums['bs_cash']||0) + Math.abs(sums['bs_receivables']||0) + Math.abs(sums['bs_inventory']||0);
     if (ca > knownCA) setInput('bs_other_current', ca - knownCA);
 
-    const cl = sums['_current_liab'] || 0;
-    const knownCL = (sums['bs_payables']||0) + (sums['bs_short_debt']||0);
+    const cl = Math.abs(sums['_current_liab'] || 0);
+    const knownCL = Math.abs(sums['bs_payables']||0) + Math.abs(sums['bs_short_debt']||0);
     if (cl > knownCL) setInput('bs_other_current_liab', cl - knownCL);
 
-    const fl = sums['_fixed_liab'] || 0;
-    const knownFL = (sums['bs_long_debt']||0);
+    const fl = Math.abs(sums['_fixed_liab'] || 0);
+    const knownFL = Math.abs(sums['bs_long_debt']||0);
     if (fl > knownFL) setInput('bs_other_fixed_liab', fl - knownFL);
   }
 }
